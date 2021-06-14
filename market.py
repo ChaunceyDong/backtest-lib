@@ -430,6 +430,13 @@ class Market:
         timestamp, *book_state = book_state.values
         _, *trades_state = trades_state.values
 
+        # skip if data is corrupted, that is, if prices are crossed
+        corrupted = any(
+            bid >= ask for bid, ask in zip(book_state[0::4], book_state[2::4])
+        )
+        if corrupted:
+            return
+
         # set update-related attributes based on list representation 
         self._timestamp = timestamp
         self._best_bid = round(book_state[0], 3) # <L1-BidPrice>
@@ -439,10 +446,10 @@ class Market:
         # set dictionary representation for t-1 (_book_last), t (_book_this)
         self._book_last = self._book_this
         self._book_this = dict(zip(book_state[0::2], book_state[1::2]))
-
+        
         # function to return mid point given book_state as input dictionary (0 if empty)
-        mid_point = lambda input: sum(
-            list(input)[:2] # [<L1-BidPrice>, <L1-AskPrice>]
+        mid_point = lambda book_state: sum(
+            list(book_state)[:2] # [<L1-BidPrice>, <L1-AskPrice>]
         ) / 2
         # function to test whether price is on opposite sides of last and this mid point
         opposite_side = lambda price: (
