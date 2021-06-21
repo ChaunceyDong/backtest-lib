@@ -67,7 +67,7 @@ class BaseAgent(abc.ABC):
         :param market_id:
             str, market identifier
         :param news_state:
-            pd.Series, including timestamp, message
+            pd.Series, including timestamp, ...
         """
 
         raise NotImplementedError("To be implemented in subclass.")
@@ -88,7 +88,9 @@ class BaseAgent(abc.ABC):
         raise NotImplementedError("To be implemented in subclass.")
 
     # order management ---
-
+    
+    # TODO: move _assert_exposure to execution rather than submission or
+    # account for active orders
     def _assert_exposure(self, market_id, side, quantity, limit):
         """
         Assert agent exposure. Note that program execution is supposed to
@@ -100,14 +102,27 @@ class BaseAgent(abc.ABC):
             "market_id '{market_id}' does not exist".format(
                 market_id=market_id,
             )
-        # assert that exposure_left is not exceeded
+
+        # calculate position value for limit order
         if limit:
-            position_value = quantity * limit
+            exposure_change = quantity * limit
+        # calculate position value for market order (estimated)
         else:
-            position_value = quantity * self.markets[market_id].mid_point
-        assert self.exposure_left >= position_value, \
-            "{position_value} exceeds exposure_left {exposure_left}".format(
-                position_value=position_value,
+            exposure_change = quantity * self.markets[market_id].mid_point
+
+        # ...
+        exposure_test = self.exposure.copy() # isolate changes
+        exposure_test[market_id] = self.exposure[market_id] + exposure_change * {
+            "buy": + 1, "sell": - 1,
+        }[side]
+        exposure_test_total = round(
+            sum(abs(exposure) for _, exposure in exposure_test.items()), 3
+        )
+
+        # ...
+        assert self.exposure_limit >= exposure_test_total, \
+            "{exposure_change} exceeds exposure_left ({exposure_left})".format(
+                exposure_change=exposure_change,
                 exposure_left=self.exposure_left,
             )
 
